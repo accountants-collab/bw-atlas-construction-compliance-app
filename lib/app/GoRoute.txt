@@ -1,0 +1,36 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../auth/auth_state.dart';
+import '../auth/login_screen.dart';
+import '../features/home/home_screen.dart';
+import '../features/surveys/ui/survey_list_screen.dart';
+import 'router_refresh.dart';
+
+final appRouterProvider = Provider<GoRouter>((ref) {
+  final auth = ref.watch(authControllerProvider);
+  final refresh = RouterRefreshNotifier(ref);
+
+  return GoRouter(
+    initialLocation: '/',
+    refreshListenable: refresh,
+    redirect: (context, state) {
+      final isLoggingIn = state.matchedLocation == '/login';
+
+      if (!auth.isLoggedIn) {
+        return isLoggingIn ? null : '/login';
+      }
+
+      if (auth.isLoggedIn && isLoggingIn) {
+        return '/';
+      }
+
+      return null;
+    },
+    routes: [
+      GoRoute(path: '/login', builder: (c, s) => const LoginScreen()),
+      GoRoute(path: '/', builder: (c, s) => const HomeScreen()),
+      GoRoute(path: '/surveys', builder: (c, s) => const SurveyListScreen()),
+    ],
+  );
+});

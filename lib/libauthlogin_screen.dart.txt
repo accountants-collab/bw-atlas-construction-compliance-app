@@ -1,0 +1,48 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'auth_state.dart';
+
+class LoginScreen extends ConsumerWidget {
+  const LoginScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(authControllerProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Login')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Fire Door Surveys',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Status: ${auth.isLoggedIn ? "Logged in" : "Logged out"}'),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () => ref.read(authControllerProvider.notifier).loginAsWorker(),
+                    child: const Text('Login as Worker'),
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton(
+                    onPressed: () => ref.read(authControllerProvider.notifier).loginAsManager(),
+                    child: const Text('Login as Manager'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

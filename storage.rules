@@ -1,0 +1,29 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function currentEmail() {
+      return request.auth.token.email;
+    }
+
+    function isPlatformSuperAdmin() {
+      return isSignedIn() && currentEmail() == 'info@bestwaycarpentry.com';
+    }
+
+    match /companies/{companyId}/{allPaths=**} {
+      allow read: if isSignedIn();
+    }
+
+    match /companies/{companyId}/logos/{allPaths=**} {
+      allow write: if isSignedIn();
+    }
+
+    match /companies/{companyId}/uploads/{allPaths=**} {
+      allow write: if request.method != 'delete' && isSignedIn();
+      allow delete: if isPlatformSuperAdmin() || isSignedIn();
+    }
+  }
+}

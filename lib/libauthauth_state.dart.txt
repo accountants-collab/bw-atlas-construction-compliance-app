@@ -1,0 +1,44 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+enum UserRole { manager, worker }
+
+class AuthState {
+  final bool isLoggedIn;
+  final UserRole role;
+  final String displayName;
+
+  const AuthState({
+    required this.isLoggedIn,
+    required this.role,
+    required this.displayName,
+  });
+
+  AuthState copyWith({bool? isLoggedIn, UserRole? role, String? displayName}) {
+    return AuthState(
+      isLoggedIn: isLoggedIn ?? this.isLoggedIn,
+      role: role ?? this.role,
+      displayName: displayName ?? this.displayName,
+    );
+  }
+}
+
+class AuthController extends StateNotifier<AuthState> {
+  AuthController()
+      : super(const AuthState(isLoggedIn: false, role: UserRole.worker, displayName: ''));
+
+  void loginAsManager() {
+    state = const AuthState(isLoggedIn: true, role: UserRole.manager, displayName: 'Manager');
+  }
+
+  void loginAsWorker() {
+    state = const AuthState(isLoggedIn: true, role: UserRole.worker, displayName: 'Worker');
+  }
+
+  void logout() {
+    state = const AuthState(isLoggedIn: false, role: UserRole.worker, displayName: '');
+  }
+}
+
+final authControllerProvider = StateNotifierProvider<AuthController, AuthState>((ref) {
+  return AuthController();
+});

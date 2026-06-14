@@ -1,0 +1,83 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../auth/auth_state.dart';
+
+class HomeScreen extends ConsumerWidget {
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(authControllerProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Home (${auth.role.name})'),
+        actions: [
+          TextButton(
+            onPressed: () => ref.read(authControllerProvider.notifier).logout(),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _Tile(
+            title: 'Survey',
+            subtitle: 'Add doors, ART issues, photos, generate PDF',
+            onTap: () => GoRouter.of(context).go('/surveys'),
+            // или: onTap: () => context.go('/surveys'),
+          ),
+          const SizedBox(height: 12),
+          const _Tile(
+            title: 'Maintenance',
+            subtitle: 'Coming next (step 2)',
+            onTap: null,
+          ),
+          const SizedBox(height: 12),
+          const _Tile(
+            title: 'Installation',
+            subtitle: 'Coming next (step 3)',
+            onTap: null,
+          ),
+          const SizedBox(height: 12),
+          const _Tile(
+            title: 'Installation Survey',
+            subtitle: 'Coming next (step 4)',
+            onTap: null,
+          ),
+          if (auth.role == UserRole.manager) ...[
+            const SizedBox(height: 12),
+            const _Tile(
+              title: 'Reports (Manager)',
+              subtitle: 'Coming later (manager-only)',
+              onTap: null,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _Tile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final VoidCallback? onTap;
+
+  const _Tile({required this.title, required this.subtitle, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onTap,
+      ),
+    );
+  }
+}

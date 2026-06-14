@@ -1,0 +1,26 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+class SurveyListScreen extends StatelessWidget {
+  const SurveyListScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Surveys')),
+      body: const Center(
+        child: Text('Survey list (Step 1). Next: Create Survey + Doors.'),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          // next step: create new survey and go to doors
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Next step: Create Survey (we will add it).')),
+          );
+        },
+        label: const Text('New Survey'),
+        icon: const Icon(Icons.add),
+      ),
+    );
+  }
+}

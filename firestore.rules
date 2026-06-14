@@ -1,0 +1,219 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function currentUid() {
+      return request.auth.uid;
+    }
+
+    function currentEmail() {
+      return request.auth.token.email;
+    }
+
+    function isPlatformSuperAdmin() {
+      return isSignedIn() && currentEmail() == 'info@bestwaycarpentry.com';
+    }
+
+    function userTenantDoc() {
+      return get(/databases/$(database)/documents/userTenants/$(currentUid()));
+    }
+
+    function hasTenant() {
+      return isSignedIn() && exists(/databases/$(database)/documents/userTenants/$(currentUid()));
+    }
+
+    function tenantCompanyId() {
+      return hasTenant() ? userTenantDoc().data.companyId : null;
+    }
+
+    function isSameCompany(companyId) {
+      return hasTenant() && tenantCompanyId() == companyId;
+    }
+
+    function memberPath(companyId) {
+      return /databases/$(database)/documents/companies/$(companyId)/members/$(currentUid());
+    }
+
+    function isMember(companyId) {
+      return isSignedIn() && exists(memberPath(companyId));
+    }
+
+    function memberData(companyId) {
+      return get(memberPath(companyId)).data;
+    }
+
+    function memberRole(companyId) {
+      return isMember(companyId) && (memberData(companyId).role is string)
+        ? memberData(companyId).role
+        : '';
+    }
+
+    function isManagerRole(companyId) {
+      let role = memberRole(companyId);
+      return role in ['owner', 'manager', 'admin', 'inspector'];
+    }
+
+    function isWorkerRole(companyId) {
+      return memberRole(companyId) == 'worker';
+    }
+
+    // Email queue for extension.
+    match /mail/{mailId} {
+      allow create: if isSignedIn();
+      allow read: if false;
+      allow update, delete: if false;
+    }
+
+    // Map logged-in user to active company.
+    match /userTenants/{uid} {
+      allow read: if isSignedIn() && uid == currentUid();
+      allow create: if isSignedIn()
+        && uid == currentUid()
+        && request.resource.data.companyId is string;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    match /companies/{companyId} {
+      allow read: if isPlatformSuperAdmin() || isSameCompany(companyId);
+
+      // First-time company registration by freshly created Firebase user.
+      allow create: if isSignedIn()
+        && request.resource.data.companyId == companyId
+        && request.resource.data.email == currentEmail()
+        && request.resource.data.status == 'active';
+
+      // Company profile changes are manager-only.
+      allow update: if isPlatformSuperAdmin() || (isSameCompany(companyId) && isManagerRole(companyId));
+      allow delete: if false;
+
+      match /members/{memberUid} {
+        allow read: if isPlatformSuperAdmin() || isSameCompany(companyId);
+
+        // Registration path: user creates own first member profile.
+        allow create: if isSignedIn()
+          && memberUid == currentUid()
+          && request.resource.data.email == currentEmail()
+          && request.resource.data.role is string;
+
+        // Managers can manage all members in the company.
+        allow update: if isPlatformSuperAdmin() || (isSameCompany(companyId) && isManagerRole(companyId));
+        allow delete: if false;
+      }
+
+      match /deviceTokens/{deviceId} {
+        allow read: if isPlatformSuperAdmin() || (isSameCompany(companyId) && resource.data.userId == currentUid());
+        allow create: if isSameCompany(companyId)
+          && request.resource.data.companyId == companyId
+          && request.resource.data.userId == currentUid()
+          && request.resource.data.token is string;
+        allow update: if isSameCompany(companyId)
+          && resource.data.userId == currentUid()
+          && request.resource.data.userId == currentUid()
+          && request.resource.data.companyId == companyId;
+        allow delete: if isSameCompany(companyId) && resource.data.userId == currentUid();
+      }
+
+      match /notifications/{notificationId} {
+        allow read: if isPlatformSuperAdmin() || (isSameCompany(companyId) && resource.data.recipientUserId == currentUid());
+        allow create: if isSameCompany(companyId)
+          && request.resource.data.companyId == companyId
+          && request.resource.data.actorUserId == currentUid()
+          && request.resource.data.recipientUserId is string;
+        allow update: if isSameCompany(companyId)
+          && resource.data.recipientUserId == currentUid()
+          && request.resource.data.recipientUserId == currentUid()
+          && request.resource.data.companyId == companyId;
+        allow delete: if false;
+      }
+
+      match /notificationQueue/{queueId} {
+        allow read: if false;
+        allow create: if isSameCompany(companyId)
+          && request.resource.data.companyId == companyId
+          && request.resource.data.actorUserId == currentUid();
+        allow update, delete: if false;
+      }
+
+      // Shared company files metadata (actual file bytes are in Cloud Storage).
+      match /files/{fileId} {
+        allow read: if isPlatformSuperAdmin() || isSameCompany(companyId);
+        allow create: if isSameCompany(companyId)
+          && request.resource.data.companyId == companyId
+          && request.resource.data.createdByUid == currentUid()
+          && request.resource.data.storagePath is string;
+        allow update: if isPlatformSuperAdmin() || (isSameCompany(companyId) && isManagerRole(companyId));
+        allow delete: if isPlatformSuperAdmin() || (isSameCompany(companyId) && isManagerRole(companyId));
+      }
+
+      // Shared app settings/profile state used across devices.
+      match /app/{docId} {
+        allow read: if isPlatformSuperAdmin() || isSameCompany(companyId);
+        allow create: if isPlatformSuperAdmin() || (isSameCompany(companyId) && isManagerRole(companyId));
+        allow update: if isPlatformSuperAdmin() || (isSameCompany(companyId) && isManagerRole(companyId));
+        allow delete: if false;
+      }
+
+      // Disclaimer acceptance records - permanent compliance records per report/user.
+      match /disclaimerAcceptances/{acceptanceId} {
+        // All company members can read disclaimer records.
+        allow read: if isSameCompany(companyId);
+
+        // Create: Any company member can save a disclaimer record for a report in their company.
+        // Keep validation light here because the Flutter web Firestore client can surface opaque
+        // internal assertion errors when strict rule predicates reject a write.
+        allow create: if isSameCompany(companyId)
+          && request.resource.data.companyId == companyId
+          && request.resource.data.acceptanceId == acceptanceId;
+
+        // Update: Managers only (for corrections/updates if needed).
+        allow update: if isSameCompany(companyId) && isManagerRole(companyId);
+
+        // Delete: Managers only (audit trail should be preserved).
+        allow delete: if isPlatformSuperAdmin() || (isSameCompany(companyId) && isManagerRole(companyId));
+      }
+
+      // Survey data (projects, doors, pins) — cross-device sync.
+      // All company members can read. Members can create/update surveys in
+      // their own company. Delete is manager-only to protect audit trail.
+      match /surveys/{surveyId} {
+        allow read: if isPlatformSuperAdmin() || isSameCompany(companyId);
+        allow create: if isSameCompany(companyId);
+        allow update: if isSameCompany(companyId);
+        allow delete: if isPlatformSuperAdmin() || (isSameCompany(companyId) && isManagerRole(companyId));
+      }
+
+      // Snagging projects — cross-device sync.
+      match /snaggingProjects/{projectId} {
+        allow read: if isPlatformSuperAdmin() || isSameCompany(companyId);
+        allow create: if isSameCompany(companyId);
+        allow update: if isSameCompany(companyId);
+        allow delete: if isPlatformSuperAdmin() || (isSameCompany(companyId) && isManagerRole(companyId));
+      }
+    }
+
+    match /invites/{inviteId} {
+      // Managers can list/manage invites in their company.
+      allow read: if isSignedIn() && (
+        isPlatformSuperAdmin()
+        || isManagerRole(resource.data.companyId)
+        || resource.data.invitedEmail == currentEmail()
+      );
+      allow create: if isSignedIn()
+        && (isPlatformSuperAdmin() || isManagerRole(request.resource.data.companyId))
+        && request.resource.data.status == 'pending';
+      allow update: if isSignedIn() && (
+        // Managers revoke/maintain invites
+        isPlatformSuperAdmin()
+        || isManagerRole(resource.data.companyId)
+        // Invited user can mark own invite accepted
+        || (request.resource.data.invitedEmail == currentEmail()
+            && request.resource.data.status == 'accepted')
+      );
+      allow delete: if false;
+    }
+  }
+}

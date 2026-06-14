@@ -1,0 +1,21 @@
+import 'dart:typed_data';
+
+import 'package:archive/archive.dart';
+
+import '../domain/models.dart';
+import 'survey_pdf.dart';
+
+class SurveyZipBuilder {
+  static Future<Uint8List> buildPerDoorZip(Survey survey) async {
+    final archive = Archive();
+
+    for (final door in survey.doors) {
+      final pdfBytes = await SurveyPdfBuilder.buildSingleDoorPdf(survey, door);
+      final fileName = 'Door-${door.number.toString().padLeft(3, '0')}.pdf';
+      archive.addFile(ArchiveFile(fileName, pdfBytes.length, pdfBytes));
+    }
+
+    final zipBytes = ZipEncoder().encode(archive);
+    return Uint8List.fromList(zipBytes ?? <int>[]);
+    }
+}

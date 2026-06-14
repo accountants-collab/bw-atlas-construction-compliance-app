@@ -1,0 +1,89 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../auth/auth_state.dart';
+import '../auth/login_screen.dart';
+import '../features/home/home_screen.dart';
+import '../features/surveys/ui/survey_list_screen.dart';
+import '../features/surveys/ui/door_list_screen.dart';
+import '../features/surveys/ui/door_detail_screen.dart';
+import '../features/surveys/ui/add_issue_screen.dart';
+import '../features/surveys/ui/art04_gaps_screen.dart';
+
+final appRouterProvider = Provider<GoRouter>((ref) {
+  final auth = ref.watch(authControllerProvider);
+
+  return GoRouter(
+    initialLocation: '/',
+    refreshListenable: GoRouterRefreshStream(
+      ref.watch(authControllerProvider.notifier).stream,
+    ),
+    redirect: (context, state) {
+      final loggingIn = state.matchedLocation == '/login';
+      if (!auth.isLoggedIn) {
+        return loggingIn ? null : '/login';
+      }
+      if (auth.isLoggedIn && loggingIn) return '/';
+      return null;
+    },
+    routes: [
+      GoRoute(path: '/login', builder: (c, s) => const LoginScreen()),
+      GoRoute(
+        path: '/',
+        builder: (c, s) => const HomeScreen(),
+        routes: [
+          GoRoute(
+            path: 'surveys',
+            builder: (c, s) => const SurveyListScreen(),
+            routes: [
+              GoRoute(
+                path: ':surveyId/doors',
+                builder: (c, s) => DoorListScreen(surveyId: s.pathParameters['surveyId']!),
+                routes: [
+                  GoRoute(
+                    path: ':doorId',
+                    builder: (c, s) => DoorDetailScreen(
+                      surveyId: s.pathParameters['surveyId']!,
+                      doorId: s.pathParameters['doorId']!,
+                    ),
+                    routes: [
+                      GoRoute(
+                        path: 'add-issue',
+                        builder: (c, s) => AddIssueScreen(
+                          surveyId: s.pathParameters['surveyId']!,
+                          doorId: s.pathParameters['doorId']!,
+                        ),
+                      ),
+                      GoRoute(
+                        path: 'art04',
+                        builder: (c, s) => Art04GapsScreen(
+                          surveyId: s.pathParameters['surveyId']!,
+                          doorId: s.pathParameters['doorId']!,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    ],
+  );
+});
+
+/// Helper: GoRouterRefreshStream (minimal)
+class GoRouterRefreshStream extends ChangeNotifier {
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    notifyListeners();
+    _sub = stream.asBroadcastStream().listen((_) => notifyListeners());
+  }
+  late final StreamSubscription<dynamic> _sub;
+
+  @override
+  void dispose() {
+    _sub.cancel();
+    super.dispose();
+  }
+}
