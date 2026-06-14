@@ -58,6 +58,9 @@ flutter_*.log
 run_output.txt
 build_temp.txt
 file_list.txt
+.continue/
+.tmp_live_*
+assets/._*
 
 # Symbolication related
 app.*.symbols
